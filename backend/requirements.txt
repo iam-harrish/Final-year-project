@@ -1,0 +1,11 @@
+flask==3.1.0
+flask-cors==5.0.1
+flask-jwt-extended==4.7.1
+torch
+torchaudio
+librosa==0.10.2
+numpy
+scikit-learn==1.6.1
+matplotlib==3.10.0
+moviepy==2.1.2
+werkzeug==3.1.3

@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+.env
+
+# Flask / Backend specific
+backend/uploads/*
+!backend/uploads/.gitkeep
+backend/users.db
+backend/temp_audio.wav
+backend/metrics.json
+
+# Node / Frontend specific
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/src/assets/generated/
+
+# OS / IDE
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Project weights (ignore if they are large, but usually kept if they are the main part of the repo)
+# hybrid_spoof_model.pth
+# asv_model.pth
