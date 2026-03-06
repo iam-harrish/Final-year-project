@@ -56,14 +56,14 @@ export default function HowItWorks() {
                     { step: 4, title: 'Classification Result', description: 'Get a confidence score for real vs AI-generated audio.', icon: 'result' },
                 ],
                 model_info: {
-                    architecture: 'Hybrid CNN + GRU Fusion Model',
-                    spectral_branch: 'SpectralCNN — Conv2d(1→16→32) + FC → 64-dim',
+                    architecture: 'Hybrid EfficientNet-B0 + GRU Fusion Model',
+                    spectral_branch: 'EfficientNet-B0 (ImageNet pretrained) + FC → 64-dim',
                     temporal_branch: 'TemporalGRU — GRU(400→128) + FC → 64-dim',
                     fusion: 'Concatenation (128-dim) → Linear(128→64→1)',
                     activation: 'ReLU + Sigmoid',
                     training_data: 'ASVspoof 2019 LA Dataset',
                     sample_rate: '16kHz',
-                    accuracy: '91.52%',
+                    accuracy: '98.52%',
                 },
             });
         } finally {

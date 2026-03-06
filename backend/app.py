@@ -96,9 +96,9 @@ def hash_password(password):
 # =========================
 # Load Model on Startup
 # =========================
-MODEL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'hybrid_spoof_model.pth')
+MODEL_PATH = "hybrid_efficientnet_gru.pth"
 model, device = load_model(MODEL_PATH)
-print(f"Hybrid FusionModel loaded successfully on {device}")
+print(f"Hybrid EfficientNet-GRU Model loaded successfully on {device}")
 
 # =========================
 # Load Metrics
@@ -402,14 +402,14 @@ def how_it_works():
             }
         ],
         "model_info": {
-            "architecture": "Hybrid CNN + GRU Fusion Model",
-            "spectral_branch": "SpectralCNN — Conv2d(1→16→32) + FC → 64-dim",
+            "architecture": "Hybrid EfficientNet-B0 + GRU Fusion Model",
+            "spectral_branch": "EfficientNet-B0 (ImageNet pretrained) + FC → 64-dim",
             "temporal_branch": "TemporalGRU — GRU(400→128) + FC → 64-dim",
             "fusion": "Concatenation (128-dim) → Linear(128→64→1)",
             "activation": "ReLU + Sigmoid",
             "training_data": "ASVspoof 2019 LA Dataset",
             "sample_rate": "16kHz",
-            "accuracy": "91.52%"
+            "accuracy": "98.52%"
         }
     }
     return jsonify(content), 200

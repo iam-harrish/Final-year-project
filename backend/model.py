@@ -1,37 +1,32 @@
 """
-Hybrid Deepfake Audio Detection Model — SpectralCNN + TemporalGRU Fusion
-Matches the architecture from detection.ipynb for loading hybrid_spoof_model.pth
+Hybrid Deepfake Audio Detection Model — EfficientNet-B0 + GRU Fusion
+Matches the architecture from train_improved.py for loading hybrid_efficientnet_gru.pth
 """
 import torch
 import torch.nn as nn
 import librosa
 import numpy as np
 import os
+from torchvision import models
 from moviepy import VideoFileClip
+
+IMG_SIZE = 224
 
 
 # =========================
 # Model Architecture
 # =========================
-class SpectralCNN(nn.Module):
-    """CNN branch for mel-spectrogram (spectral) features."""
+class SpectralEfficientNet(nn.Module):
+    """EfficientNet-B0 branch for mel-spectrogram (spectral) features."""
     def __init__(self):
         super().__init__()
-        self.conv = nn.Sequential(
-            nn.Conv2d(1, 16, 3, padding=1),
-            nn.ReLU(),
-            nn.MaxPool2d(2),
-            nn.Conv2d(16, 32, 3, padding=1),
-            nn.ReLU(),
-            nn.MaxPool2d(2)
-        )
-        self.fc = nn.Linear(32 * 32 * 32, 64)
+        self.backbone = models.efficientnet_b0(weights="IMAGENET1K_V1")
+        self.backbone.classifier = nn.Identity()
+        self.fc = nn.Linear(1280, 64)
 
     def forward(self, x):
-        x = self.conv(x)
-        x = x.view(x.size(0), -1)
-        x = self.fc(x)
-        return x
+        x = self.backbone(x)
+        return self.fc(x)
 
 
 class TemporalGRU(nn.Module):
@@ -48,10 +43,10 @@ class TemporalGRU(nn.Module):
 
 
 class FusionModel(nn.Module):
-    """Hybrid model fusing SpectralCNN and TemporalGRU branches.
+    """Hybrid model fusing SpectralEfficientNet and TemporalGRU branches.
 
     Architecture:
-        - SpectralCNN: Conv2d(1→16→32) + FC → 64-dim
+        - SpectralEfficientNet: EfficientNet-B0 + FC → 64-dim
         - TemporalGRU: GRU(400→128) + FC → 64-dim
         - Fusion: Concat(64+64=128) → Linear(128→64) → ReLU → Linear(64→1)
 
@@ -61,7 +56,7 @@ class FusionModel(nn.Module):
     """
     def __init__(self):
         super().__init__()
-        self.spectral = SpectralCNN()
+        self.spectral = SpectralEfficientNet()
         self.temporal = TemporalGRU()
         self.classifier = nn.Sequential(
             nn.Linear(128, 64),
@@ -149,14 +144,14 @@ def preprocess_audio(filepath):
 
 
 def extract_spectral(y, sr):
-    """Extract normalized mel-spectrogram features (128×128).
+    """Extract normalized mel-spectrogram features (3×224×224).
 
     Args:
         y: Audio waveform array (4s at 16kHz)
         sr: Sample rate
 
     Returns:
-        torch.Tensor of shape (1, 128, 128) — single-channel mel spectrogram
+        torch.Tensor of shape (3, 224, 224) — 3-channel mel spectrogram for EfficientNet
     """
     mel = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=128)
     mel_db = librosa.power_to_db(mel)
@@ -164,12 +159,19 @@ def extract_spectral(y, sr):
     # Min-max normalize
     mel_db = (mel_db - mel_db.min()) / (mel_db.max() - mel_db.min() + 1e-6)
 
-    # Ensure exactly 128 time frames
-    mel_db = mel_db[:, :128]
-    if mel_db.shape[1] < 128:
-        mel_db = np.pad(mel_db, ((0, 0), (0, 128 - mel_db.shape[1])))
+    mel_db = torch.tensor(mel_db).unsqueeze(0)  # (1, 128, T)
 
-    mel_db = torch.tensor(mel_db).unsqueeze(0)
+    # Resize to IMG_SIZE x IMG_SIZE
+    mel_db = torch.nn.functional.interpolate(
+        mel_db.unsqueeze(0),
+        size=(IMG_SIZE, IMG_SIZE),
+        mode="bilinear",
+        align_corners=False
+    ).squeeze(0)  # (1, 224, 224)
+
+    # Repeat to 3 channels for EfficientNet
+    mel_db = mel_db.repeat(3, 1, 1)  # (3, 224, 224)
+
     return mel_db.float()
 
 

@@ -5,27 +5,18 @@ echo ======================================================
 echo       DeepGuard AI - Automatic Project Starter
 echo ======================================================
 
-:: --- Backend Setup ---
-echo [1/3] Setting up Backend...
-cd backend
+:: --- Virtual Environment Setup ---
+echo.
+echo [1/3] Setting up Virtual Environment...
 
 if not exist .venv (
     echo Creating virtual environment...
     python -m venv .venv
 )
 
-echo Activating virtual environment and installing requirements...
+echo Activating virtual environment...
 call .venv\Scripts\activate
-pip install -r requirements.txt
 
-echo Regenerating metrics...
-python generate_metrics.py
-
-:: Start Backend in a new minimized window
-echo Starting Backend server...
-start /min "DeepGuard Backend" cmd /c "call .venv\Scripts\activate && python app.py"
-
-cd ..
 
 :: --- Frontend Setup ---
 echo.
@@ -33,17 +24,36 @@ echo [2/3] Setting up Frontend...
 cd frontend
 
 if not exist node_modules (
-    echo Installing npm dependencies (this may take a minute)...
+    echo Installing npm dependencies, this may take a minute...
     call npm install
 )
 
+:: Start Frontend in a new window
+echo Starting Frontend dev server...
+start "DeepGuard Frontend" cmd /k "npm run dev"
+
+cd ..
+
+:: --- Backend Setup ---
+echo.
+echo [3/3] Starting Backend...
+cd backend
+
+:: Start Backend in a new window
+echo Starting Backend server...
+start "DeepGuard Backend" cmd /k "call ..\.venv\Scripts\activate && python app.py"
+
+cd ..
+
 :: --- Finalize ---
 echo.
-echo [3/3] Launching Project...
-echo Backend is running at http://localhost:5000
-echo Frontend is starting...
-
-:: Run frontend in the current window
-npm run dev
-
-pause
+echo ======================================================
+echo       DeepGuard AI - All Services Running!
+echo ======================================================
+echo.
+echo   Frontend : http://localhost:5173
+echo   Backend  : http://localhost:5000
+echo.
+echo   (Close this window or press any key to stop)
+echo ======================================================
+pause >nul
