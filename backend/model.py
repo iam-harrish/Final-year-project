@@ -110,7 +110,8 @@ def extract_audio_from_video(video_path, output_path="temp_audio.wav"):
 
 
 def preprocess_audio(filepath):
-    """Load audio, resample to 16 kHz, pad/trim to 4 seconds, and normalize.
+    """Load audio, resample to 16 kHz, and normalize.
+    Does NOT trim to 4s here anymore to allow sliding window.
 
     Args:
         filepath: Path to audio file
@@ -128,19 +129,44 @@ def preprocess_audio(filepath):
         if len(y) < sr * 0.1:
             raise ValueError("Audio file is too short (minimum 0.1 seconds required)")
 
-        # Pad or trim to exactly 4 seconds
-        max_len = 4 * 16000
-        if len(y) > max_len:
-            y = y[:max_len]
-        else:
-            y = np.pad(y, (0, max_len - len(y)))
-
         y = librosa.util.normalize(y)
         return y, sr
     except ValueError:
         raise
     except Exception as e:
         raise ValueError(f"Failed to preprocess audio: {str(e)}")
+
+
+def get_audio_chunks(y, sr, duration=4, overlap=2):
+    """Split audio into overlapping chunks.
+    
+    Args:
+        y: Audio waveform
+        sr: Sample rate
+        duration: Duration of each chunk in seconds
+        overlap: Overlap between chunks in seconds
+        
+    Returns:
+        List of chunks, each being a numpy array
+    """
+    chunk_size = duration * sr
+    hop_size = (duration - overlap) * sr
+    
+    if len(y) <= chunk_size:
+        # Pad to chunk_size if shorter
+        padded = np.pad(y, (0, max(0, chunk_size - len(y))))
+        return [padded]
+    
+    chunks = []
+    for i in range(0, len(y) - chunk_size + 1, hop_size):
+        chunks.append(y[i:i + chunk_size])
+    
+    # If there's a significant remainder, pad and add the last chunk
+    if len(y) % hop_size != 0 and (len(y) - chunks[-1].size) > sr * 0.5:
+        last_chunk = y[-chunk_size:]
+        chunks.append(last_chunk)
+        
+    return chunks
 
 
 def extract_spectral(y, sr):
@@ -209,17 +235,7 @@ def load_model(model_path):
 
 
 def predict(model, device, spectral_features, temporal_features):
-    """Run prediction on spectral + temporal features.
-
-    Args:
-        model: The loaded FusionModel
-        device: torch device
-        spectral_features: Tensor of shape (1, 128, 128) — mel spectrogram
-        temporal_features: Tensor of shape (num_frames, 400) — audio frames
-
-    Returns:
-        dict with prediction results
-    """
+    """Run prediction on a single 4s chunk."""
     spectral = spectral_features.unsqueeze(0).to(device)
     temporal = temporal_features.unsqueeze(0).to(device)
 
@@ -227,24 +243,42 @@ def predict(model, device, spectral_features, temporal_features):
         output = model(spectral, temporal)
         probability = torch.sigmoid(output).item()
 
+    return probability
+
+
+def predict_robust(model, device, y, sr):
+    """Run prediction on multiple chunks and aggregate results.
+    
+    Returns the maximum fake probability found across all chunks
+    to ensure we catch deepfakes even if they only appear in part of the audio.
+    """
+    chunks = get_audio_chunks(y, sr)
+    probabilities = []
+    
+    for chunk in chunks:
+        spec = extract_spectral(chunk, sr)
+        temp = extract_temporal(chunk)
+        prob = predict(model, device, spec, temp)
+        probabilities.append(prob)
+    
+    # Aggregate: Use max probability for deepfake detection
+    max_prob = max(probabilities)
+    
     # probability > 0.5 → FAKE (AI-generated/spoof), else → REAL (bonafide)
-    is_fake = probability > 0.5
+    is_fake = max_prob > 0.5
 
     if is_fake:
         label = "FAKE"
-        confidence = probability * 100
-        real_prob = (1 - probability) * 100
-        fake_prob = probability * 100
+        confidence = max_prob * 100
     else:
         label = "REAL"
-        confidence = (1 - probability) * 100
-        real_prob = (1 - probability) * 100
-        fake_prob = probability * 100
+        confidence = (1 - max_prob) * 100
 
     return {
         "label": label,
         "confidence": round(confidence, 2),
-        "real_probability": round(real_prob, 2),
-        "fake_probability": round(fake_prob, 2),
-        "raw_score": round(probability, 6)
+        "real_probability": round((1 - max_prob) * 100, 2),
+        "fake_probability": round(max_prob * 100, 2),
+        "raw_score": round(max_prob, 6),
+        "num_chunks": len(chunks)
     }

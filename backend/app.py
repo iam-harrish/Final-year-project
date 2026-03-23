@@ -19,7 +19,7 @@ from flask_jwt_extended import (
 from werkzeug.utils import secure_filename
 
 from model import (
-    load_model, preprocess_audio, extract_spectral, extract_temporal, predict,
+    load_model, preprocess_audio, predict_robust,
     is_allowed_file, is_video_file, extract_audio_from_video,
     ALLOWED_EXTENSIONS
 )
@@ -291,13 +291,11 @@ def predict_audio():
             temp_audio_path = os.path.join(app.config['UPLOAD_FOLDER'], f"temp_{uuid.uuid4()}.wav")
             audio_path = extract_audio_from_video(filepath, temp_audio_path)
         
-        # Preprocess audio and extract dual-branch features
+        # Preprocess audio (full waveform)
         y, sr = preprocess_audio(audio_path)
-        spectral_features = extract_spectral(y, sr)
-        temporal_features = extract_temporal(y)
         
-        # Get prediction from hybrid model
-        result = predict(model, device, spectral_features, temporal_features)
+        # Get prediction from hybrid model using sliding window
+        result = predict_robust(model, device, y, sr)
         result['filename'] = filename
         
         # Save prediction to database
